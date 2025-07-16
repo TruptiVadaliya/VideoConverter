@@ -238,7 +238,7 @@ export default function Home() {
       {/* Image list */}
       {images.length > 0 && (
         <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId="my-list" isCombineEnabled={!!someCondition}>
+          <Droppable droppableId="my-list" isCombineEnabled={!!someCondition} isDropDisabled={false} ignoreContainerClipping={false}>
             {(provided) => (
               <div
                 className="flex gap-4 overflow-x-auto mb-6 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg snap-x snap-mandatory"
