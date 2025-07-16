@@ -1,15 +1,14 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+// Remove react-beautiful-dnd imports
+// import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { v4 as uuidv4 } from "uuid"; // For unique IDs
 
-function reorder(list, startIndex, endIndex) {
-  const result = Array.from(list);
-  const [removed] = result.splice(startIndex, 1);
-  result.splice(endIndex, 0, removed);
-  return result;
-}
+// Remove reorder function (handled by arrayMove)
 
 export default function Home() {
   const [images, setImages] = useState([]);
@@ -74,6 +73,21 @@ export default function Home() {
   const [selectedLibraryTrack, setSelectedLibraryTrack] = useState("");
   const [previewAudio, setPreviewAudio] = useState(null);
 
+  // DnD-kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  // DnD-kit drag end handler
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (active && over && active.id !== over.id) {
+      const oldIndex = images.findIndex((img) => img.id === active.id);
+      const newIndex = images.findIndex((img) => img.id === over.id);
+      setImages((imgs) => arrayMove(imgs, oldIndex, newIndex));
+    }
+  };
+
   // Clean up preview URLs to prevent memory leaks
   useEffect(() => {
     return () => {
@@ -107,13 +121,6 @@ export default function Home() {
     accept: { "image/*": [] },
     multiple: true,
   });
-
-  const onDragEnd = (result) => {
-    if (!result.destination) return;
-    setImages((imgs) =>
-      reorder(imgs, result.source.index, result.destination.index)
-    );
-  };
 
   const removeImage = (id) => {
     setImages((imgs) => {
@@ -187,6 +194,44 @@ export default function Home() {
     }
   };
 
+  // SortableImage component for DnD-kit
+  function SortableImage({ id, img, idx, removeImage }) {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+    return (
+      <div
+        className="relative group snap-center"
+        ref={setNodeRef}
+        style={style}
+        role="button"
+        tabIndex={0}
+        {...attributes}
+        {...listeners}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") removeImage(id);
+        }}
+      >
+        <img
+          src={img.preview}
+          alt={`preview-${idx}`}
+          className="w-32 h-32 object-cover rounded shadow border-2 border-gray-300 dark:border-gray-600"
+        />
+        <button
+          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 text-xs opacity-80 hover:opacity-100"
+          onClick={() => removeImage(id)}
+          title="Remove"
+          type="button"
+          aria-label={`Remove image ${idx + 1}`}
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-8 px-2">
       <h1 className="text-3xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">
@@ -237,74 +282,41 @@ export default function Home() {
 
       {/* Image list */}
       {images.length > 0 && (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId="my-list" isCombineEnabled={!!someCondition} isDropDisabled={false} ignoreContainerClipping={false}>
-            {(provided) => (
-              <div
-                className="flex gap-4 overflow-x-auto mb-6 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg snap-x snap-mandatory"
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                style={{ scrollSnapType: "x mandatory" }}>
-                {images.map((img, idx) => (
-                  <React.Fragment key={img.id}>
-                    {/* REMOVE: Plus button before each image (except first) */}
-                    <Draggable draggableId={img.id} index={idx}>
-                      {(provided) => (
-                        <div
-                          className="relative group snap-center"
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ")
-                              removeImage(img.id);
-                          }}>
-                          <img
-                            src={img.preview}
-                            alt={`preview-${idx}`}
-                            className="w-32 h-32 object-cover rounded shadow border-2 border-gray-300 dark:border-gray-600"
-                          />
-                          <button
-                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 text-xs opacity-80 hover:opacity-100"
-                            onClick={() => removeImage(img.id)}
-                            title="Remove"
-                            type="button"
-                            aria-label={`Remove image ${idx + 1}`}>
-                            ✕
-                          </button>
-                          
-                        </div>
-                      )}
-                    </Draggable>
-                    {/* Plus button only after the last image */}
-                    {idx === images.length - 1 && (
-                      <div className="flex flex-col items-center justify-center">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          style={{ display: "none" }}
-                          ref={(el) => (fileInputRefs.current[img.id] = el)}
-                          onChange={(e) => handlePlusFileChange(e, idx)}
-                        />
-                        <button
-                          type="button"
-                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow text-sm"
-                          title="Insert image after"
-                          onClick={() => fileInputRefs.current[img.id]?.click()}
-                          aria-label={`Insert image after ${idx + 1}`}>
-                          +
-                        </button>
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={images.map((img) => img.id)} strategy={horizontalListSortingStrategy}>
+            <div
+              className="flex gap-4 overflow-x-auto mb-6 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg snap-x snap-mandatory"
+              style={{ scrollSnapType: "x mandatory" }}
+            >
+              {images.map((img, idx) => (
+                <React.Fragment key={img.id}>
+                  <SortableImage id={img.id} img={img} idx={idx} removeImage={removeImage} />
+                  {/* Plus button only after the last image */}
+                  {idx === images.length - 1 && (
+                    <div className="flex flex-col items-center justify-center">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        ref={(el) => (fileInputRefs.current[img.id] = el)}
+                        onChange={(e) => handlePlusFileChange(e, idx)}
+                      />
+                      <button
+                        type="button"
+                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow text-sm"
+                        title="Insert image after"
+                        onClick={() => fileInputRefs.current[img.id]?.click()}
+                        aria-label={`Insert image after ${idx + 1}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Show TrendingSongs only if images are selected */}
