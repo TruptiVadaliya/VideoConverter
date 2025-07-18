@@ -10,7 +10,6 @@ import { exec as execCb } from "child_process";
 import { promisify } from "util";
 import ffprobeStatic from "ffprobe-static";
 import fsSync from "fs";
-import { upload } from '@vercel/blob/client';
 
 const exec = promisify(execCb);
 
@@ -62,40 +61,6 @@ async function getMediaDuration(filePath) {
     return 30;
   }
 }
-
-async function uploadImagesToBlob(images) {
-  return Promise.all(images.map(async (img) => {
-    const { url } = await upload(img.file.name, img.file, { access: 'public' });
-    return url;
-  }));
-}
-
-const handleGenerateVideo = async () => {
-  setLoading(true);
-  setError("");
-  try {
-    // 1. Upload images to Blob and get URLs
-    const imageUrls = await uploadImagesToBlob(images);
-
-    // 2. Send only the URLs to your API
-    const response = await fetch("/api/create-video", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        images: imageUrls,
-        // ...other fields like durations, audioUrl, etc.
-      }),
-    });
-
-    // 3. Handle response...
-  } catch (err) {
-    setError("Failed to generate video: " + err.message);
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Removed uploadToBlob function, as uploads should be handled on the frontend only
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
