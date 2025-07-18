@@ -10,6 +10,7 @@ import { exec as execCb } from "child_process";
 import { promisify } from "util";
 import ffprobeStatic from "ffprobe-static";
 import fsSync from "fs";
+import { upload } from '@vercel/blob/client';
 
 const exec = promisify(execCb);
 
@@ -60,6 +61,11 @@ async function getMediaDuration(filePath) {
   } catch {
     return 30;
   }
+}
+
+async function uploadToBlob(file) {
+  const { url } = await upload(file.name, file, { access: 'public' });
+  return url;
 }
 
 export default async function handler(req, res) {
