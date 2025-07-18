@@ -3,16 +3,28 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 // Remove react-beautiful-dnd imports
 // import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { v4 as uuidv4 } from "uuid"; // For unique IDs
+import { v4 as uuidv4 } from "uuid"; 
 
 // Remove reorder function (handled by arrayMove)
 
 export default function Home() {
   const [images, setImages] = useState([]);
   const [durations, setDurations] = useState([]); // durations per image
+  const [videoDuration, setVideoDuration] = useState(2); // default 10 seconds
   const [allDuration, setAllDuration] = useState(2); // for 'Set all durations'
   const [videoUrl, setVideoUrl] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -28,50 +40,21 @@ export default function Home() {
   // Update built-in music options to use real, royalty-free tracks
   const BUILT_IN_MUSIC = [
     {
-      url: "https://cdn.pixabay.com/audio/2022/10/16/audio_12b6b3b6e7.mp3",
-      label: "Inspiring Corporate (Pixabay Music)",
-    },
-    {
-      url: "https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae7c7.mp3",
-      label: "Happy Upbeat (Pixabay Music)",
-    },
-    {
-      url: "https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b7b4b.mp3",
-      label: "Chill Lo-Fi (Pixabay Music)",
+      url: "/music-1.mp3",
+      fileName: "inspiring-corporate.mp3",
+      label: "Inspiring Corporate (Local)"
     },
   ];
-  const [selectedSampleMusic, setSelectedSampleMusic] = useState("");
+  const [selectedMusic, setSelectedMusic] = useState(null);
+  const [customMusicName, setCustomMusicName] = useState("");
+  const [selectedMusicFileName, setSelectedMusicFileName] = useState("");
 
-  // Enhanced built-in music library
-  const MUSIC_LIBRARY = [
-    {
-      url: "https://cdn.pixabay.com/audio/2022/10/16/audio_12b6b3b6e7.mp3",
-      label: "Inspiring Corporate",
-      artist: "Pixabay Music",
-    },
-    {
-      url: "https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae7c7.mp3",
-      label: "Happy Upbeat",
-      artist: "Pixabay Music",
-    },
-    {
-      url: "https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b7b4b.mp3",
-      label: "Chill Lo-Fi",
-      artist: "Pixabay Music",
-    },
-    {
-      url: "https://cdn.pixabay.com/audio/2023/03/13/audio_128b7b7b7b.mp3",
-      label: "Energetic Pop",
-      artist: "Pixabay Music",
-    },
-    {
-      url: "https://cdn.pixabay.com/audio/2022/11/16/audio_12c3b3b3b3.mp3",
-      label: "Romantic Piano",
-      artist: "Pixabay Music",
-    },
-  ];
-  const [selectedLibraryTrack, setSelectedLibraryTrack] = useState("");
-  const [previewAudio, setPreviewAudio] = useState(null);
+  // Song list state (built-in + custom)
+  const [songs, setSongs] = useState([
+    { id: 1, label: "Inspiring Corporate (Local)", fileName: "inspiring-corporate.mp3", type: "builtin" },
+  ]);
+  const [selectedSongId, setSelectedSongId] = useState(1);
+  const fileInputRef = useRef(null);
 
   // DnD-kit sensors
   const sensors = useSensors(
@@ -88,38 +71,54 @@ export default function Home() {
     }
   };
 
-  // Clean up preview URLs to prevent memory leaks
+  // Clean up video preview URL only when videoUrl changes
   useEffect(() => {
     return () => {
-      images.forEach((img) => URL.revokeObjectURL(img.preview));
       if (videoUrl) URL.revokeObjectURL(videoUrl);
     };
-  }, [images, videoUrl]);
+  }, [videoUrl]);
 
+  const [mode, setMode] = useState('images'); // 'images' or 'video'
   // Update durations when images change
   useEffect(() => {
-    setDurations((prev) => {
-      if (images.length === prev.length) return prev;
-      // Add default duration 2s for new images
-      return images.map((img, i) => prev[i] || 2);
-    });
-  }, [images]);
+    if (mode === 'images') {
+      setDurations(images.map(() => videoDuration));
+    }
+  }, [images, videoDuration, mode]);
 
+  const [videoFile, setVideoFile] = useState(null);
+
+  // Correct: Always append new images, never overwrite
   const onDrop = useCallback((acceptedFiles) => {
-    setImages((prev) => [
-      ...prev,
-      ...acceptedFiles.map((file) => ({
-        file,
-        preview: URL.createObjectURL(file),
-        id: uuidv4(),
-      })),
-    ]);
-  }, []);
+    if (mode === 'images') {
+      const imageFiles = acceptedFiles.filter(
+        f => f && f.type && f.type.startsWith("image/") && f.size > 0
+      );
+      if (imageFiles.length !== acceptedFiles.length) {
+        alert("Only valid image files are allowed!");
+      }
+      setImages((prev) => [
+        ...prev,
+        ...imageFiles.map((file) => ({
+          file,
+          preview: URL.createObjectURL(file),
+          id: uuidv4(),
+        })),
+      ]);
+    } else if (mode === 'video') {
+      const vid = acceptedFiles.find(f => f && f.type && f.type.startsWith('video/') && f.size > 0);
+      if (!vid) {
+        alert('Only valid video files are allowed!');
+        return;
+      }
+      setVideoFile(vid);
+    }
+  }, [mode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "image/*": [] },
-    multiple: true,
+    accept: mode === 'images' ? { "image/*": [] } : { "video/*": [] },
+    multiple: mode === 'images',
   });
 
   const removeImage = (id) => {
@@ -130,7 +129,12 @@ export default function Home() {
     });
   };
 
+  // Correct: Insert new image after the given index, preserving all previous images
   const handleInsertImage = (index, file) => {
+    if (!file || !file.type || !file.type.startsWith("image/") || file.size === 0) {
+      alert("Only valid image files are allowed!");
+      return;
+    }
     const newImage = {
       file,
       preview: URL.createObjectURL(file),
@@ -144,11 +148,11 @@ export default function Home() {
   };
 
   const handlePlusFileChange = (e, idx) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleInsertImage(idx, file);
-    }
-    e.target.value = ""; // Reset input
+    const files = Array.from(e.target.files || []);
+    files.forEach((file, i) => {
+      handleInsertImage(idx + i, file);
+    });
+    e.target.value = "";
   };
 
   // When user selects a song from playlist
@@ -167,18 +171,91 @@ export default function Home() {
     setDurations(images.map(() => allDuration));
   };
 
+  // Handle built-in music selection
+  const handleBuiltInMusicSelect = (e) => {
+    setSelectedMusic(e.target.value);
+    const selected = BUILT_IN_MUSIC.find(m => m.url === e.target.value);
+    setSelectedMusicFileName(selected ? selected.fileName : "");
+    setCustomMusicName("");
+  };
+
+  // Handle custom music upload
+  const handleCustomMusicUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedMusic(file);
+      setCustomMusicName(file.name);
+    }
+  };
+
+  // Remove song from list
+  const removeSong = (id) => {
+    setSongs(songs => songs.filter(song => song.id !== id));
+    if (selectedSongId === id) {
+      setSelectedSongId(songs.length > 1 ? songs[0].id : null);
+    }
+  };
+
+  // Add custom song
+  const handleAddCustomSong = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleCustomSongUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const newSong = {
+        id: Date.now(),
+        label: file.name,
+        file,
+        type: "custom"
+      };
+      setSongs(songs => [...songs, newSong]);
+      setSelectedSongId(newSong.id);
+      setCustomMusicName(file.name);
+    }
+  };
+
   const handleGenerateVideo = async () => {
     setError("");
     setVideoUrl(null);
-    if (images.length < 2) {
-      setError("Please upload at least 2 images to create a video.");
-      return;
+    if (mode === 'images') {
+      if (images.length < 2) {
+        setError("Please upload at least 2 images to create a video.");
+        return;
+      }
+    } else if (mode === 'video') {
+      if (!videoFile) {
+        setError("Please upload a video file.");
+        return;
+      }
     }
     setLoading(true);
     try {
       const formData = new FormData();
-      images.forEach((img) => formData.append("images", img.file));
-      formData.append("durations", JSON.stringify(durations));
+      if (mode === 'images') {
+        images.forEach((img) => formData.append("images", img.file));
+        formData.append("durations", JSON.stringify(durations));
+      } else if (mode === 'video') {
+        formData.append('video', videoFile);
+        formData.append('duration', videoDuration);
+      }
+      // Add selected song to formData
+      const selectedSong = songs.find(song => song.id === selectedSongId);
+      if (selectedSong) {
+        if (selectedSong.type === "custom" && selectedSong.file) {
+          formData.append("audio", selectedSong.file);
+        } else if (selectedSong.type === "builtin" && selectedSong.fileName) {
+          formData.append("audioFileName", selectedSong.fileName);
+        }
+      }
+      // Debug logging
+      console.log("Selected song:", selectedSong);
+      // Print all FormData keys and values for debugging
+      for (let pair of formData.entries()) {
+        console.log(pair[0]+ ':', pair[1]);
+      }
+      console.log("FormData keys:", Array.from(formData.keys()));
       const res = await fetch("/api/create-video", {
         method: "POST",
         body: formData,
@@ -194,9 +271,9 @@ export default function Home() {
     }
   };
 
-  // SortableImage component for DnD-kit
   function SortableImage({ id, img, idx, removeImage }) {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+    const { attributes, listeners, setNodeRef, transform, transition } =
+      useSortable({ id });
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
@@ -212,8 +289,7 @@ export default function Home() {
         {...listeners}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") removeImage(id);
-        }}
-      >
+        }}>
         <img
           src={img.preview}
           alt={`preview-${idx}`}
@@ -224,8 +300,7 @@ export default function Home() {
           onClick={() => removeImage(id)}
           title="Remove"
           type="button"
-          aria-label={`Remove image ${idx + 1}`}
-        >
+          aria-label={`Remove image ${idx + 1}`}>
           ✕
         </button>
       </div>
@@ -235,35 +310,40 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center py-8 px-2">
       <h1 className="text-3xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">
-        Multiple Image Uploader & Reorder
+        Multiple Image/Video Uploader & Reorder
       </h1>
-
-      {/* Audio upload UI */}
-      {/* Remove Audio upload UI */}
-
-      {/* Set all durations UI */}
-      {images.length > 0 && (
+      {/* Mode Switcher */}
+      <div className="mb-6 flex gap-4">
+        <button
+          className={`px-4 py-2 rounded ${mode === 'images' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          onClick={() => { setMode('images'); setVideoFile(null); }}
+        >
+          Create from Images
+        </button>
+        <button
+          className={`px-4 py-2 rounded ${mode === 'video' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          onClick={() => { setMode('video'); setImages([]); }}
+        >
+          Replace Audio in Video
+        </button>
+      </div>
+      {/* Duration input for images mode */}
+      {mode === 'images' && (
         <div className="mb-4 flex items-center gap-2">
-          <label className="text-sm font-semibold">
-            Set all durations (sec):
-          </label>
+          <label className="font-semibold">Duration (seconds):</label>
           <input
             type="number"
-            min="0.1"
-            step="0.1"
-            value={allDuration}
-            onChange={(e) => setAllDuration(parseFloat(e.target.value) || 0)}
-            className="w-16 px-1 py-0.5 rounded border"
+            min="1"
+            value={videoDuration}
+            onChange={e => {
+              const val = Number(e.target.value);
+              setVideoDuration(val);
+              setDurations(images.map(() => val));
+            }}
+            className="ml-2 w-20 px-1 py-0.5 rounded border"
           />
-          <button
-            type="button"
-            className="bg-blue-500 hover:bg-blue-600 text-white rounded px-3 py-1 text-sm"
-            onClick={handleSetAllDurations}>
-            Apply to all
-          </button>
         </div>
       )}
-
       {/* Dropzone */}
       <div
         {...getRootProps()}
@@ -275,39 +355,46 @@ export default function Home() {
         <input {...getInputProps()} />
         <p className="text-center text-gray-600 dark:text-gray-300">
           {isDragActive
-            ? "Drop the images here ..."
-            : "Drag & drop images here, or click to select files"}
+            ? (mode === 'images' ? "Drop the images here ..." : "Drop the video here ...")
+            : (mode === 'images' ? "Drag & drop images here, or click to select files" : "Drag & drop a video here, or click to select a video")}
         </p>
       </div>
-
-      {/* Image list */}
-      {images.length > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={images.map((img) => img.id)} strategy={horizontalListSortingStrategy}>
+      {/* Image list (only in images mode) */}
+      {mode === 'images' && images.length > 0 && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}>
+          <SortableContext
+            items={images.map((img) => img.id)}
+            strategy={horizontalListSortingStrategy}>
             <div
-              className="flex gap-4 overflow-x-auto mb-6 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg snap-x snap-mandatory"
-              style={{ scrollSnapType: "x mandatory" }}
-            >
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
               {images.map((img, idx) => (
                 <React.Fragment key={img.id}>
-                  <SortableImage id={img.id} img={img} idx={idx} removeImage={removeImage} />
+                  <SortableImage
+                    id={img.id}
+                    img={img}
+                    idx={idx}
+                    removeImage={removeImage}
+                  />
                   {/* Plus button only after the last image */}
                   {idx === images.length - 1 && (
                     <div className="flex flex-col items-center justify-center">
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         style={{ display: "none" }}
                         ref={(el) => (fileInputRefs.current[img.id] = el)}
                         onChange={(e) => handlePlusFileChange(e, idx)}
                       />
                       <button
                         type="button"
-                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow text-sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl w-8 h-8 flex items-center justify-center shadow-md text-base transition duration-200 ease-in-out hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         title="Insert image after"
                         onClick={() => fileInputRefs.current[img.id]?.click()}
-                        aria-label={`Insert image after ${idx + 1}`}
-                      >
+                        aria-label={`Insert image after ${idx + 1}`}>
                         +
                       </button>
                     </div>
@@ -318,6 +405,79 @@ export default function Home() {
           </SortableContext>
         </DndContext>
       )}
+      {/* Video preview (only in video mode) */}
+      {mode === 'video' && videoFile && (
+        <div className="w-full max-w-xl flex flex-col items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+          <video
+            src={URL.createObjectURL(videoFile)}
+            controls
+            className="w-full rounded"
+            style={{ maxHeight: 400 }}
+          />
+          <div className="text-sm text-gray-600">{videoFile.name}</div>
+        </div>
+      )}
+      {/* Music Selection UI (same for both modes) */}
+      {/* <div className="w-full max-w-xl mb-6 flex flex-col gap-2">
+        <label className="font-semibold">Choose built-in music:</label>
+        <select
+          className="border rounded px-2 py-1"
+          value={typeof selectedMusic === "string" ? selectedMusic : ""}
+          onChange={handleBuiltInMusicSelect}
+        >
+          <option value="">None</option>
+          {BUILT_IN_MUSIC.map((music) => (
+            <option key={music.url} value={music.url}>{music.label}</option>
+          ))}
+        </select>
+        <label className="font-semibold mt-2">Or upload your own music:</label>
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={handleCustomMusicUpload}
+        />
+        {customMusicName && (
+          <div className="text-sm text-gray-600">Selected: {customMusicName}</div>
+        )}
+      </div> */}
+
+      {/* Song List UI (same for both modes) */}
+      <div className="w-full max-w-xl mb-6 flex flex-col gap-2">
+        {/* <label className="font-semibold">Available Songs:</label>
+        <ul className="border rounded divide-y">
+          {songs.map(song => (
+            <li key={song.id} className="flex items-center justify-between px-2 py-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="selectedSong"
+                  checked={selectedSongId === song.id}
+                  onChange={() => setSelectedSongId(song.id)}
+                />
+                {song.label}
+              </label>
+            
+            </li>
+          ))}
+        </ul> */}
+        <button
+          type="button"
+          className="mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1 text-sm w-fit"
+          onClick={handleAddCustomSong}
+        >
+          Add Custom Song
+        </button>
+        <input
+          type="file"
+          accept="audio/*"
+          style={{ display: "none" }}
+          ref={fileInputRef}
+          onChange={handleCustomSongUpload}
+        />
+        {customMusicName && (
+          <div className="text-sm text-gray-600">Selected: {customMusicName}</div>
+        )}
+      </div>
 
       {/* Show TrendingSongs only if images are selected */}
       {/* Remove TrendingSongs UI */}
@@ -326,9 +486,9 @@ export default function Home() {
       <button
         className="mt-6 bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded shadow disabled:opacity-60 disabled:cursor-not-allowed"
         onClick={handleGenerateVideo}
-        disabled={loading || images.length < 2}
-        aria-disabled={loading || images.length < 2}>
-        {loading ? "Generating Video..." : "Generate Video"}
+        disabled={loading || (mode === 'images' ? images.length < 2 : !videoFile)}
+        aria-disabled={loading || (mode === 'images' ? images.length < 2 : !videoFile)}>
+        {loading ? "Generating Video..." : (mode === 'images' ? "Generate Video" : "Replace Audio")}
       </button>
 
       {/* Error Message */}
@@ -344,7 +504,7 @@ export default function Home() {
           <video
             src={videoUrl}
             controls
-            muted
+            // muted
             className="w-full rounded"
             style={{ maxHeight: 400 }}
           />
